@@ -1,7 +1,12 @@
 import streamlit as st
 import datetime
 import requests
+import os
+from dotenv import load_dotenv
 from PIL import Image
+
+# Load API keys from .env
+load_dotenv()
 
 # Set the page
 st.set_page_config(page_title="Bitcoin Sentiment Tracker")
@@ -21,19 +26,38 @@ today = datetime.date.today().strftime("%B %d, %Y")
 st.subheader(f"Date: {today}")
 st.markdown("---")
 
-# Get BTC price + 24h change
-def get_btc_price_and_change():
+# Get BTC price from Coinbase
+def get_btc_price():
     try:
-        url = "https://api.coingecko.com/api/v3/coins/bitcoin?localization=false&tickers=false&market_data=true"
+        url = "https://api.coinbase.com/v2/prices/spot?currency=USD"
         response = requests.get(url)
         data = response.json()
-        price = data["market_data"]["current_price"]["usd"]
-        change = data["market_data"]["price_change_percentage_24h"]
-        return price, change
+        price = float(data["data"]["amount"])
+        return price
     except:
-        return None, None
+        return None
 
-btc_price, btc_change = get_btc_price_and_change()
+btc_price = get_btc_price()
+
+# Get Bitcoin sentiment score from LunarCrush
+def get_bitcoin_social_sentiment():
+    try:
+        api_key = os.getenv("LUNARCRUSH_API_KEY")
+        url = "https://api.lunarcrush.com/v2"
+        params = {
+            "data": "assets",
+            "key": api_key,
+            "symbol": "BTC"
+        }
+        response = requests.get(url, params=params)
+        data = response.json()
+        score = data["data"][0]["galaxy_score"]
+        return score
+    except:
+        return None
+
+# Get sentiment score now
+social_score = get_bitcoin_social_sentiment()
 
 # Color-coded dropdowns
 def colored_selectbox(label, options):
@@ -61,15 +85,16 @@ with col1:
     etf_sentiment = colored_selectbox("ETF Flows", ["Positive", "Flat", "Negative"])
 
 with col2:
-    if btc_price is not None and btc_change is not None:
-        st.metric(
-            label="BTC Price (USD)",
-            value=f"${btc_price:,.2f}",
-            delta=f"{btc_change:+.2f}%",
-            delta_color="normal"
-        )
+    if btc_price is not None:
+        st.metric(label="BTC Price (USD)", value=f"${btc_price:,.2f}")
+        st.markdown("*Bitcoin price data via Coinbase*")
     else:
         st.metric("BTC Price (USD)", "Unavailable")
+
+    if social_score is not None:
+        st.markdown(f"**Social Sentiment Score:** {social_score}/100")
+    else:
+        st.markdown("Social Sentiment Score: Unavailable")
 
     custom_notes = st.text_area("Custom Summary or Notes", height=180)
 
@@ -100,8 +125,19 @@ overall = overall_sentiment(news_sentiment, twitter_sentiment, etf_sentiment)
 st.markdown("---")
 st.markdown("### Generated Snapshot")
 
+if btc_price is not None:
+    price_line = f"Bitcoin Price: ${btc_price:,.2f}"
+else:
+    price_line = "Bitcoin Price: Unavailable"
+
+if social_score is not None:
+    sentiment_line = f"Social Sentiment Score: {social_score}/100"
+else:
+    sentiment_line = "Social Sentiment Score: Unavailable"
+
 output = f"""Date: {today}
-Bitcoin Price: ${btc_price:,.2f} ({btc_change:+.2f}%)
+{price_line}
+{sentiment_line}
 Bitcoin Sentiment: {overall}
 
 News Sentiment: {news_sentiment}  
@@ -115,11 +151,5 @@ Summary:
 st.code(output, language="text")
 st.download_button("Download Snapshot as .txt", output, file_name=f"btc_sentiment_snapshot_{today}.txt")
 
-# Footer + vibecoding image
+# Footer only (image removed)
 st.caption("Built by Ryan with Vibes.")
-try:
-    vibe_img = Image.open("Vibecoding.png")
-    st.image(vibe_img, width=150)
-except:
-    st.warning("Add 'Vibecoding.png' to display the closing vibe.")
-
