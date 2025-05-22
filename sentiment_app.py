@@ -109,15 +109,17 @@ def overall_sentiment(news, twitter, etf):
         "Bearish": -1,
         "Negative": -1
     }
-    score += sentiment_map[news]
-    score += sentiment_map[twitter]
-    score += sentiment_map[etf]
+    score += sentiment_map.get(news, 0)
+    score += sentiment_map.get(twitter, 0)
+    score += sentiment_map.get(etf, 0)
+
     if score >= 2:
         return "🟢 Bullish"
     elif score <= -2:
         return "🔴 Bearish"
     else:
         return "🟡 Neutral"
+
 
 overall = overall_sentiment(news_sentiment, twitter_sentiment, etf_sentiment)
 
